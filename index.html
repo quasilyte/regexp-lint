@@ -1,0 +1,212 @@
+<meta charset="utf-8">
+<title>RegExp Lint</title>
+<meta name="description" content="RegExp Lint - regular expression static analyzer.">
+
+<style>
+    * {
+        font-size: 13px;
+        color: #335d7b;
+        font-family: -apple-system,BlinkMacSystemFont,Roboto,Open Sans,Helvetica Neue,sans-serif;
+        font-weight: 400;
+    }
+    
+    body {
+        background-color: #edeef0;
+        margin: 0;
+    }
+    
+    button {
+        all: unset;
+    }
+    
+    .back {
+        background: #4a76a8;
+        height: 42px;
+        padding-left: 16px;
+        border-bottom: 1px solid #4872a3;
+        margin-bottom: 8px;
+        line-height: 42px;
+    }
+    
+    #regexp-input {
+        font-family: monospace;
+        font-size: 16px;
+        line-height: 31px;
+        width: 690px;
+    }
+
+    #selfref {
+        font-size: 16pt;
+        text-decoration: none;
+        color: white !important;
+        font-weight: 600;
+    }
+    
+    .controlref {
+        font-size: 13pt;
+        color: #c0cfe1 !important;
+        padding: 6px;
+        background-color: #224b7a;
+        border-radius: 14px;
+    }
+    
+    #option-tabs {
+        width: 342px;
+        height: 554px; /* 600 - 46 */
+        border-radius: 4px;
+        box-shadow: 0 1px 0 0 #d7d8db, 0 0 0 1px #e3e4e8;
+        padding: 8px;
+    }
+    
+    #tab-selector {
+        background-color: #fff;
+        border-radius: 4px;
+        box-shadow: 0 1px 0 0 #d7d8db, 0 0 0 1px #e3e4e8;
+    }
+    
+    td {
+        padding: 0;
+    }
+    
+    td button {
+        cursor: pointer;
+        text-decoration: none;
+        display: block;
+        padding-left: 18px;
+        line-height: 31px;
+        width: 140px;
+    }
+    
+    td button:hover {
+        background-color: #f0f2f5;
+    }
+    
+    .option-link {
+        display: inline-block;
+        width: 110px;
+        height: auto;
+        cursor: pointer;
+    }
+    
+    .option-link img:hover {
+        background-color: #f0f2f5;
+    }
+    
+    .option-link img {
+        text-decoration: none;
+        width: 110px;
+        height: auto;
+        border-bottom: 1px solid #dfe2e8;
+        background-color: #fff;
+    }
+    
+    .option-tab {
+        display: none;
+        overflow-y: scroll;
+        width: 100%;
+        height: 100%;
+        background-color: #fff;
+    }
+    
+    .option-selected {
+        background-color: #f0f2f5 !important;
+    }
+
+    #lint-output {
+        background: #4a76a8;
+        width: 678px;
+        height: 300px;
+        padding: 6px;
+        color: white !important;
+        font-family: monospace;
+        font-size: 16px;
+    }
+
+    hr {
+        border: none;
+        color: #5181b8;
+        background-color: #5181b8; 
+        height: 2px;
+    }
+  
+    
+    .tab-selected {
+        background-color: #f0f2f5;
+        border-left: 2px solid #5181b8;
+        color: black;
+        font-weight: 500;
+        padding-left: 16px;
+    }
+    
+</style>
+
+<div class="back">
+    <a id="selfref" href="">RegExp Lint</a>
+    <a id="share" style="margin-left: 16px" class="controlref" href="#">Share</a>
+    <a class="controlref" title="Ask a question / Propose a new feature / Report a bug" href="https://github.com/quasilyte/regexplint/issues/new">Leave feedback</a>
+    <a class="controlref" title="This project is Open-Source!" href="https://github.com/quasilyte/regexplint">GitHub</a>
+</div>
+
+
+<div style="width: 1100px; height: 500px; margin-left: 16px">
+    <div style="position: relative; float: left; width: 690px; height: 570px">
+        <input id="regexp-input" placeholder="^[a-zA-Z0-9\w]+$" style="float: left" type="text">
+        <br><br><hr>
+        <div id="lint-output"></div>
+    </div>
+
+
+    <div style="margin-left: 8px; float: left">
+        <table cellspacing="0" id="tab-selector">
+            <tr><td><button class='tab-selected'>Go</button></td></tr>
+            <tr><td><button>PHP</button></td></tr>
+        </table>
+        
+        <br>
+        <div>
+            <label><input type="checkbox" disabled>Validation errors</label>
+            <br>
+            <label><input type="checkbox" checked disabled>Potential issues</label>
+            <br>
+            <label><input type="checkbox" disabled>Style suggestions</label>
+        </div>
+    </div>
+</div>
+
+<script src="vendor/wasm_exec.js"></script>
+
+<script>
+const go = new Go();
+var wasmReady = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject);
+
+window.onload = function() { 
+    var input = document.getElementById('regexp-input');
+    var output = document.getElementById('lint-output');
+
+    function checkRegexp() {
+        if (input.value == '') {
+            output.innerText = 'no warnings or suggestions';
+            return;
+        }
+        var result = regexpLint('go', input.value);
+        if (result.Err) {
+            return;
+        }
+        output.innerHTML = '';
+        if (result.Messages.length == 0) {
+            output.innerText = 'no warnings or suggestions';
+            return;
+        }
+        output.innerText = result.Messages.join('\n');
+    }
+
+    wasmReady.then((result) => {
+        go.run(result.instance);
+        checkRegexp();
+    });
+
+    input.addEventListener('input', function (event) {
+        checkRegexp();
+    }, false);
+};
+</script>
