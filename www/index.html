@@ -137,38 +137,46 @@
         font-weight: 500;
         padding-left: 16px;
     }
-    
+
+    .option-checkbox {
+        margin: 4px;
+    }
+
 </style>
 
 <div class="back">
     <a id="selfref" href="">RegExp Lint</a>
-    <a id="share" style="margin-left: 16px" class="controlref" href="#">Share</a>
-    <a class="controlref" title="Ask a question / Propose a new feature / Report a bug" href="https://github.com/quasilyte/regexplint/issues/new">Leave feedback</a>
-    <a class="controlref" title="This project is Open-Source!" href="https://github.com/quasilyte/regexplint">GitHub</a>
+    <a id="share" title="Copy URL to clipboard" style="margin-left: 16px" class="controlref" href="#">Share</a>
+    <a class="controlref" title="Ask a question / Propose a new feature / Report a bug" href="https://github.com/quasilyte/regexp-lint/issues/new">Leave feedback</a>
+    <a class="controlref" title="This project is Open-Source!" href="https://github.com/quasilyte/regexp-lint">GitHub</a>
 </div>
 
 
 <div style="width: 1100px; height: 500px; margin-left: 16px">
     <div style="position: relative; float: left; width: 690px; height: 570px">
-        <input id="regexp-input" placeholder="^[a-zA-Z0-9\w]+$" style="float: left" type="text">
+        <input title="Insert your regexp here" id="regexp-input" placeholder="^[a-zA-Z0-9\w]+$" style="float: left" type="text">
         <br><br><hr>
-        <div id="lint-output"></div>
+        <div title="Linter output" id="lint-output"></div>
     </div>
 
 
     <div style="margin-left: 8px; float: left">
         <table cellspacing="0" id="tab-selector">
-            <tr><td><button class='tab-selected'>Go</button></td></tr>
-            <tr><td><button>PHP</button></td></tr>
+            <tr><td><button id="lang-go">Go</button></td></tr>
+            <tr><td><button id="lang-php">PHP</button></td></tr>
         </table>
         
         <br>
         <div>
-            <label><input type="checkbox" disabled>Validation errors</label>
-            <br>
-            <label><input type="checkbox" checked disabled>Potential issues</label>
-            <br>
-            <label><input type="checkbox" disabled>Style suggestions</label>
+            <div class="option-checkbox">
+                <label title="Report invalid regexp parts"><input id="checkbox-errors" type="checkbox" checked>Validation errors</label>
+            </div>
+            <div class="option-checkbox">
+                <label title="Report suspicious regexp parts"><input id="checkbox-warnings" type="checkbox" checked>Potential issues</label>
+            </div>
+            <div class="option-checkbox">
+                <label title="Report style suggestions"l><input id="checkbox-suggestions" type="checkbox" checked>Style suggestions</label>
+            </div>
         </div>
     </div>
 </div>
@@ -180,16 +188,74 @@ const go = new Go();
 var wasmReady = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject);
 
 window.onload = function() { 
+    var shareButton = document.getElementById('share');
     var input = document.getElementById('regexp-input');
     var output = document.getElementById('lint-output');
+    var checkboxErrors = document.getElementById('checkbox-errors');
+    var checkboxWarnings = document.getElementById('checkbox-warnings');
+    var checkboxSuggestions = document.getElementById('checkbox-suggestions');
+    var langGo = document.getElementById('lang-go');
+    var langPHP = document.getElementById('lang-php');
 
-    function checkRegexp() {
-        if (input.value == '') {
+    var query = new URLSearchParams(window.location.search);
+    var regexpLang = query.get('lang');
+    if (regexpLang == 'go') {
+        langGo.classList.add('tab-selected');
+    } else if (regexpLang == 'php') {
+        langPHP.classList.add('tab-selected');
+    } else {
+        langGo.classList.add('tab-selected');
+        regexpLang = 'go';
+    }
+
+    if (query.get('re')) {
+        input.value = decodeURIComponent(query.get('re'));
+    }
+
+    function copyToClipboard(text) {
+        let el = document.createElement("textarea"); // Temp container
+        el.value = text;
+        el.setAttribute("readonly", "");
+        el.style.position = "absolute";
+        el.style.left = "-9999px";
+        document.body.appendChild(el);
+        el.select();
+        try {
+            let ok = document.execCommand("copy");
+            console.debug("copy to clipboard:", ok);
+        } catch (e) {
+            console.error("clipboard insertion failed", e);
+        }
+        document.body.removeChild(el);
+    }
+
+    function shareURL() {
+        var params = [];
+        if (input.value) {
+            params.push('re=' + encodeURIComponent(input.value));
+        }
+        let url = "https://quasilyte.dev/regexp-lint/";
+        if (params.length > 0) {
+            url += "?" + params.join('&');
+        }
+        return url;
+    }
+
+    function checkRegexp(showErrors) {
+        if (!input.value) {
             output.innerText = 'no warnings or suggestions';
             return;
         }
-        var result = regexpLint('go', input.value);
+        var result = regexpLint(input.value, {
+            'lang': regexpLang,
+            'errors': checkboxErrors.checked,
+            'warnings': checkboxWarnings.checked,
+            'suggestions': checkboxSuggestions.checked,
+        });
         if (result.Err) {
+            if (showErrors) {
+                output.innerText = 'error: ' + result.Err;
+            }
             return;
         }
         output.innerHTML = '';
@@ -202,11 +268,24 @@ window.onload = function() {
 
     wasmReady.then((result) => {
         go.run(result.instance);
-        checkRegexp();
+        checkRegexp(true);
     });
 
+    shareButton.addEventListener('click', function (event) {
+        copyToClipboard(shareURL());
+    });
+
+    checkboxErrors.addEventListener('change', function (event) {
+        checkRegexp(true);
+    })
+    checkboxSuggestions.addEventListener('change', function (event) {
+        checkRegexp(true);
+    });
+    checkboxWarnings.addEventListener('change', function (event) {
+        checkRegexp(true);
+    });
     input.addEventListener('input', function (event) {
-        checkRegexp();
-    }, false);
+        checkRegexp(false);
+    });
 };
 </script>
