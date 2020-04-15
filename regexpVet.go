@@ -3,6 +3,7 @@ package main
 import (
 	"sort"
 	"strconv"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -153,6 +154,17 @@ func (c *regexpVet) updateFlagState(state *regexpFlagState, e syntax.Expr, flagS
 	}
 }
 
+var domainPrefixes = []string{
+	"com/",
+	"net/",
+	"org/",
+	"edu/",
+	"gov/",
+	"ru/",
+	"de/",
+	"us/",
+}
+
 func (c *regexpVet) checkConcat(concat syntax.Expr) {
 	if len(concat.Args) < 2 {
 		return
@@ -163,29 +175,41 @@ func (c *regexpVet) checkConcat(concat syntax.Expr) {
 			continue
 		}
 		confidence := 0
+		length := 0
 		switch curr.Value {
 		case "com", "net", "org", "edu", "gov":
 			confidence = 2
+			length = 3
 		case "ru", "de", "us":
 			confidence = 1
+			length = 2
 		default:
-			continue
+			found := false
+			for _, dp := range domainPrefixes {
+				if strings.HasPrefix(curr.Value, dp) {
+					found = true
+					confidence = 2
+					length = len(dp)
+					break
+				}
+			}
+			if !found {
+				continue
+			}
 		}
 		prev := concat.Args[i-1]
 		if prev.Op != syntax.OpDot {
 			continue
 		}
-		prefix := ""
 		if i-2 >= 0 {
 			prevprev := concat.Args[i-2]
 			if c.isCharOrLit(prevprev) {
-				prefix = prevprev.Value
 				confidence++
 			}
 		}
 		if confidence > 1 {
-			c.warn("'%s.%s' should be '%s\\.%s'",
-				prefix, curr.Value, prefix, curr.Value)
+			c.warn("'.%s' should be '\\.%s'",
+				curr.Value[:length], curr.Value[:length])
 		}
 	}
 }

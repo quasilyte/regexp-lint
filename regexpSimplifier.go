@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/quasilyte/regex/syntax"
 )
@@ -24,7 +25,6 @@ func (c *regexpSimplifier) CheckPattern(pat string) ([]string, error) {
 	// TODO(quasilyte): evaluate char range to suggest better replacements.
 	// TODO(quasilyte): (?:ab|ac) -> a[bc]
 	// TODO(quasilyte): suggest "s" and "." flag if things like [\w\W] are used.
-	// TODO(quasilyte): do more than 1 round, simplify [^0-9] -> \d.
 	// TODO(quasilyte): x{n}x? -> x{n,n+1}
 
 	c.walk(re.Expr)
@@ -239,15 +239,8 @@ func (c *regexpSimplifier) canCombine(x, y syntax.Expr) (threshold int, ok bool)
 }
 
 func (c *regexpSimplifier) walkAlt(alt syntax.Expr) {
-	allChars := true
-	for _, e := range alt.Args {
-		if e.Op != syntax.OpChar {
-			allChars = false
-			break
-		}
-	}
-
-	if allChars {
+	// `x|y|z` -> `[xyz]`.
+	if c.allChars(alt) {
 		var b strings.Builder
 		b.WriteString("[")
 		for _, e := range alt.Args {
@@ -255,10 +248,14 @@ func (c *regexpSimplifier) walkAlt(alt syntax.Expr) {
 		}
 		b.WriteString("]")
 		c.suggestRewrite(alt.Value, b.String())
-	} else {
-		for _, a := range alt.Args {
-			c.walk(a)
-		}
+	}
+
+	if c.factorPrefixSuffix(alt) {
+		return
+	}
+
+	for _, a := range alt.Args {
+		c.walk(a)
 	}
 }
 
@@ -321,6 +318,59 @@ func (c *regexpSimplifier) simplifyCharRange(rng syntax.Expr) string {
 	}
 
 	return ""
+}
+
+func (c *regexpSimplifier) factorPrefixSuffix(alt syntax.Expr) bool {
+	// TODO: more forms of prefixes/suffixes?
+	//
+	// A more generalized algorithm could handle `fo|fo1|fo2` -> `fo[12]?`.
+	// but it's an open question whether the latter form universally better.
+	//
+	// Right now it handles only the simplest cases:
+	// `http|https` -> `https?`
+	// `xfoo|foo` -> `x?foo`
+	if len(alt.Args) != 2 {
+		return false
+	}
+	x := c.concatLiteral(alt.Args[0])
+	y := c.concatLiteral(alt.Args[1])
+	if x == y {
+		return false // Reject non-literals and identical strings early
+	}
+
+	// Let x be a shorter string.
+	if len(x) > len(y) {
+		x, y = y, x
+	}
+	// Do we have a common prefix?
+	tail := strings.TrimPrefix(y, x)
+	if len(tail) <= utf8.UTFMax && utf8.RuneCountInString(tail) == 1 {
+		c.suggestRewrite(alt.Value, x+tail+"?")
+		return true
+	}
+	// Do we have a common suffix?
+	head := strings.TrimSuffix(y, x)
+	if len(head) <= utf8.UTFMax && utf8.RuneCountInString(head) == 1 {
+		c.suggestRewrite(alt.Value, head+"?"+x)
+		return true
+	}
+	return false
+}
+
+func (c *regexpSimplifier) concatLiteral(e syntax.Expr) string {
+	if e.Op == syntax.OpConcat && c.allChars(e) {
+		return e.Value
+	}
+	return ""
+}
+
+func (c *regexpSimplifier) allChars(e syntax.Expr) bool {
+	for _, a := range e.Args {
+		if a.Op != syntax.OpChar {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *regexpSimplifier) suggestRewrite(orig, format string, args ...interface{}) {
