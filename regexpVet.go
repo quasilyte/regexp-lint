@@ -111,6 +111,12 @@ func (c *regexpVet) walk(e syntax.Expr) {
 			c.warn("dangling or redundant ^, maybe \\^ is intended?")
 		}
 
+	case syntax.OpConcat:
+		c.checkConcat(e)
+		for _, a := range e.Args {
+			c.walk(a)
+		}
+
 	default:
 		for _, a := range e.Args {
 			c.walk(a)
@@ -144,6 +150,43 @@ func (c *regexpVet) updateFlagState(state *regexpFlagState, e syntax.Expr, flagS
 			}
 		}
 		state[ch] = !clearing
+	}
+}
+
+func (c *regexpVet) checkConcat(concat syntax.Expr) {
+	if len(concat.Args) < 2 {
+		return
+	}
+	for i := 1; i < len(concat.Args); i++ {
+		curr := concat.Args[i]
+		if curr.Op != syntax.OpLiteral {
+			continue
+		}
+		confidence := 0
+		switch curr.Value {
+		case "com", "net", "org", "edu", "gov":
+			confidence = 2
+		case "ru", "de", "us":
+			confidence = 1
+		default:
+			continue
+		}
+		prev := concat.Args[i-1]
+		if prev.Op != syntax.OpDot {
+			continue
+		}
+		prefix := ""
+		if i-2 >= 0 {
+			prevprev := concat.Args[i-2]
+			if c.isCharOrLit(prevprev) {
+				prefix = prevprev.Value
+				confidence++
+			}
+		}
+		if confidence > 1 {
+			c.warn("'%s.%s' should be '%s\\.%s'",
+				prefix, curr.Value, prefix, curr.Value)
+		}
 	}
 }
 

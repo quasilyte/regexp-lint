@@ -282,24 +282,23 @@ func (c *regexpSimplifier) walkConcat(concat syntax.Expr) {
 			}
 		}
 
-		// // Try combining `xy` into `x{2}` where x=y.
-		// threshold, ok := c.canCombine(x, concat.Args[i])
-		// if !ok {
-		// 	continue
-		// }
-		// n := 1 // Can combine at least 1 pair.
-		// for j := i + 1; j < len(concat.Args); j++ {
-		// 	_, ok := c.canCombine(x, concat.Args[j])
-		// 	if !ok {
-		// 		break
-		// 	}
-		// 	n++
-		// }
-		// if n >= threshold {
-		// 	fmt.Fprintf(c.out, "{%d}", n+1)
-		// 	c.score++
-		// 	i += n
-		// }
+		// Try combining `xy` into `x{2}` where x=y.
+		threshold, ok := c.canCombine(x, concat.Args[i])
+		if !ok {
+			continue
+		}
+		n := 1 // Can combine at least 1 pair.
+		for j := i + 1; j < len(concat.Args); j++ {
+			_, ok := c.canCombine(x, concat.Args[j])
+			if !ok {
+				break
+			}
+			n++
+		}
+		if n >= threshold {
+			c.suggestRewrite(strings.Repeat(x.Value, n+1), "%s{%d}", x.Value, n+1)
+			i += n
+		}
 	}
 }
 

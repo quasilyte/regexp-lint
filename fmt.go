@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 func sprintf(format string, args ...interface{}) string {
 	if len(args) == 0 {
@@ -18,6 +21,8 @@ func sprintf(format string, args ...interface{}) string {
 				b.WriteRune(formatC(args[arg]))
 			case 's':
 				b.WriteString(formatS(args[arg]))
+			case 'd':
+				b.WriteString(formatD(args[arg]))
 			default:
 				panic("sprintf: only %c and %s are supported")
 			}
@@ -53,5 +58,14 @@ func formatS(arg interface{}) string {
 		return string(arg)
 	default:
 		panic("sprintf: invalid argument in %s")
+	}
+}
+
+func formatD(arg interface{}) string {
+	switch arg := arg.(type) {
+	case int:
+		return strconv.Itoa(arg)
+	default:
+		panic("sprintf: invalid argument in %d")
 	}
 }
